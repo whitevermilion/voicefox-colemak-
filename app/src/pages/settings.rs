@@ -109,12 +109,12 @@ impl SettingsPage {
                     self.input_mode = true;
                     self.status_msg = None;
                 }
-                (KeyModifiers::NONE, KeyCode::Up) | (KeyModifiers::NONE, KeyCode::Char('k')) => {
+                (KeyModifiers::NONE, KeyCode::Up) | (KeyModifiers::NONE, KeyCode::Char('e')) => {
                     if self.selected_source > 0 {
                         self.selected_source -= 1;
                     }
                 }
-                (KeyModifiers::NONE, KeyCode::Down) | (KeyModifiers::NONE, KeyCode::Char('j')) => {
+                (KeyModifiers::NONE, KeyCode::Down) | (KeyModifiers::NONE, KeyCode::Char('n')) => {
                     if self.selected_source + 1 < sources.len() {
                         self.selected_source += 1;
                     }
@@ -248,13 +248,13 @@ impl SettingsPage {
                 self.status_msg = None;
                 AppAction::None
             }
-            (KeyModifiers::NONE, KeyCode::Up) | (KeyModifiers::NONE, KeyCode::Char('k')) => {
+            (KeyModifiers::NONE, KeyCode::Up) | (KeyModifiers::NONE, KeyCode::Char('e')) => {
                 if self.selected_local_path > 0 {
                     self.selected_local_path -= 1;
                 }
                 AppAction::None
             }
-            (KeyModifiers::NONE, KeyCode::Down) | (KeyModifiers::NONE, KeyCode::Char('j')) => {
+            (KeyModifiers::NONE, KeyCode::Down) | (KeyModifiers::NONE, KeyCode::Char('n')) => {
                 if self.selected_local_path + 1 < paths.len() {
                     self.selected_local_path += 1;
                 }

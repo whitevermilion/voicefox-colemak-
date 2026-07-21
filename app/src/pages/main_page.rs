@@ -31,7 +31,7 @@ impl MainPage {
             self.selected = current.min(songs.len().saturating_sub(1));
         }
         match (key.modifiers, key.code) {
-            (KeyModifiers::NONE, KeyCode::Up) | (KeyModifiers::NONE, KeyCode::Char('k')) => {
+            (KeyModifiers::NONE, KeyCode::Up) | (KeyModifiers::NONE, KeyCode::Char('e')) => {
                 if !songs.is_empty() {
                     self.selected = if self.selected == 0 {
                         if ctx.config.read().unwrap().ui.wrap_navigation {
@@ -44,7 +44,7 @@ impl MainPage {
                     };
                 }
             }
-            (KeyModifiers::NONE, KeyCode::Down) | (KeyModifiers::NONE, KeyCode::Char('j')) => {
+            (KeyModifiers::NONE, KeyCode::Down) | (KeyModifiers::NONE, KeyCode::Char('n')) => {
                 if !songs.is_empty() {
                     self.selected = if self.selected + 1 < songs.len() {
                         self.selected + 1
@@ -70,13 +70,13 @@ impl MainPage {
             | (KeyModifiers::NONE, KeyCode::PageDown) => {
                 self.selected = (self.selected + 5).min(songs.len().saturating_sub(1));
             }
-            (KeyModifiers::SHIFT, KeyCode::Up) | (KeyModifiers::SHIFT, KeyCode::Char('K')) => {
+            (KeyModifiers::SHIFT, KeyCode::Up) | (KeyModifiers::SHIFT, KeyCode::Char('E')) => {
                 if self.selected > 0 {
                     ctx.playlist.move_item(self.selected, self.selected - 1);
                     self.selected -= 1;
                 }
             }
-            (KeyModifiers::SHIFT, KeyCode::Down) | (KeyModifiers::SHIFT, KeyCode::Char('J')) => {
+            (KeyModifiers::SHIFT, KeyCode::Down) | (KeyModifiers::SHIFT, KeyCode::Char('N')) => {
                 if self.selected + 1 < songs.len() {
                     ctx.playlist.move_item(self.selected, self.selected + 1);
                     self.selected += 1;

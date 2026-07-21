@@ -177,7 +177,7 @@ impl SearchPage {
                     source: self.source_filter,
                 };
             }
-            (KeyModifiers::NONE, KeyCode::Up) | (KeyModifiers::NONE, KeyCode::Char('k')) => {
+            (KeyModifiers::NONE, KeyCode::Up) | (KeyModifiers::NONE, KeyCode::Char('e')) => {
                 if !self.results.is_empty() {
                     if self.selected > 0 {
                         self.selected -= 1;
@@ -186,7 +186,7 @@ impl SearchPage {
                     }
                 }
             }
-            (KeyModifiers::NONE, KeyCode::Down) | (KeyModifiers::NONE, KeyCode::Char('j')) => {
+            (KeyModifiers::NONE, KeyCode::Down) | (KeyModifiers::NONE, KeyCode::Char('n')) => {
                 if !self.results.is_empty() {
                     if self.selected + 1 < self.results.len() {
                         self.selected += 1;
@@ -636,7 +636,7 @@ impl SearchPage {
             }
             (KeyModifiers::NONE, KeyCode::Up)
             | (KeyModifiers::NONE, KeyCode::Left)
-            | (KeyModifiers::NONE, KeyCode::Char('k')) => {
+            | (KeyModifiers::NONE, KeyCode::Char('e')) => {
                 if self.variant_selected > 0 {
                     self.variant_selected -= 1;
                 } else if self.wrap_navigation {
@@ -645,7 +645,7 @@ impl SearchPage {
             }
             (KeyModifiers::NONE, KeyCode::Down)
             | (KeyModifiers::NONE, KeyCode::Right)
-            | (KeyModifiers::NONE, KeyCode::Char('j')) => {
+            | (KeyModifiers::NONE, KeyCode::Char('n')) => {
                 if self.variant_selected + 1 < self.variant_indices.len() {
                     self.variant_selected += 1;
                 } else if self.wrap_navigation {

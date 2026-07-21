@@ -574,7 +574,7 @@ fn run_app(
                     needs_render = true;
                     continue;
                 }
-                (KeyModifiers::NONE, KeyCode::Char('n')) if !text_input_active => {
+                (KeyModifiers::NONE, KeyCode::Char('k')) if !text_input_active => {
                     if let Some((songs, index)) = ctx.playlist.next_manual_entry() {
                         execute_action(
                             AppAction::PlaySong { songs, index },
@@ -930,13 +930,13 @@ fn run_app(
                             local_scroll = 0;
                         }
                         (KeyModifiers::NONE, KeyCode::Up)
-                        | (KeyModifiers::NONE, KeyCode::Char('k')) => {
+                        | (KeyModifiers::NONE, KeyCode::Char('e')) => {
                             if !songs.is_empty() {
                                 local_selected = local_selected.saturating_sub(1);
                             }
                         }
                         (KeyModifiers::NONE, KeyCode::Down)
-                        | (KeyModifiers::NONE, KeyCode::Char('j')) => {
+                        | (KeyModifiers::NONE, KeyCode::Char('n')) => {
                             if !songs.is_empty() && local_selected + 1 < songs.len() {
                                 local_selected += 1;
                             }

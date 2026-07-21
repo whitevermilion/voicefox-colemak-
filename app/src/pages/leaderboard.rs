@@ -165,10 +165,10 @@ impl LeaderboardPage {
             (KeyModifiers::NONE, KeyCode::Right) if self.selected_board.is_none() => {
                 self.select_next_source();
             }
-            (KeyModifiers::NONE, KeyCode::Up) | (KeyModifiers::NONE, KeyCode::Char('k')) => {
+            (KeyModifiers::NONE, KeyCode::Up) | (KeyModifiers::NONE, KeyCode::Char('e')) => {
                 self.move_selection_up(ctx);
             }
-            (KeyModifiers::NONE, KeyCode::Down) | (KeyModifiers::NONE, KeyCode::Char('j')) => {
+            (KeyModifiers::NONE, KeyCode::Down) | (KeyModifiers::NONE, KeyCode::Char('n')) => {
                 self.move_selection_down(ctx);
             }
             (KeyModifiers::NONE, KeyCode::Home) | (KeyModifiers::NONE, KeyCode::Char('g')) => {
@@ -188,7 +188,7 @@ impl LeaderboardPage {
             }
             (KeyModifiers::NONE, KeyCode::Enter)
             | (KeyModifiers::NONE, KeyCode::Char('\r'))
-            | (KeyModifiers::NONE, KeyCode::Char('l')) => {
+            | (KeyModifiers::NONE, KeyCode::Char('i')) => {
                 if self.selected_board.is_some() && !self.songs.is_empty() {
                     return AppAction::PlaySong {
                         songs: self.songs.clone(),

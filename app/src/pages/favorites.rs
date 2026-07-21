@@ -86,7 +86,7 @@ impl FavoritesPage {
                 self.selected = 0;
                 self.scroll = 0;
             }
-            (KeyModifiers::NONE, KeyCode::Up) | (KeyModifiers::NONE, KeyCode::Char('k')) => {
+            (KeyModifiers::NONE, KeyCode::Up) | (KeyModifiers::NONE, KeyCode::Char('e')) => {
                 if !filtered.is_empty() {
                     if self.selected > 0 {
                         self.selected -= 1;
@@ -95,7 +95,7 @@ impl FavoritesPage {
                     }
                 }
             }
-            (KeyModifiers::NONE, KeyCode::Down) | (KeyModifiers::NONE, KeyCode::Char('j')) => {
+            (KeyModifiers::NONE, KeyCode::Down) | (KeyModifiers::NONE, KeyCode::Char('n')) => {
                 if !filtered.is_empty() {
                     if self.selected + 1 < filtered.len() {
                         self.selected += 1;

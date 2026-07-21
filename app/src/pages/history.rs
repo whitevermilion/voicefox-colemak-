@@ -96,7 +96,7 @@ pub fn handle_input(key: &KeyEvent, ctx: &AppContext, selected: &mut usize) -> A
     let history = ctx.storage.load_history();
 
     match (key.modifiers, key.code) {
-        (KeyModifiers::NONE, KeyCode::Up) | (KeyModifiers::NONE, KeyCode::Char('k')) => {
+        (KeyModifiers::NONE, KeyCode::Up) | (KeyModifiers::NONE, KeyCode::Char('e')) => {
             if !history.is_empty() {
                 if *selected > 0 {
                     *selected -= 1;
@@ -105,7 +105,7 @@ pub fn handle_input(key: &KeyEvent, ctx: &AppContext, selected: &mut usize) -> A
                 }
             }
         }
-        (KeyModifiers::NONE, KeyCode::Down) | (KeyModifiers::NONE, KeyCode::Char('j')) => {
+        (KeyModifiers::NONE, KeyCode::Down) | (KeyModifiers::NONE, KeyCode::Char('n')) => {
             if !history.is_empty() {
                 if *selected + 1 < history.len() {
                     *selected += 1;
