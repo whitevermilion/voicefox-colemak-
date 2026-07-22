@@ -215,6 +215,8 @@ fn run_app(
     let mut local_selected: usize = 0;
     let mut local_scroll: usize = 0;
     let mut confirm_delete: Option<(String, std::path::PathBuf)> = None;
+    let mut local_filter = String::new();
+    let mut local_filter_mode = false;
     let mut ui_areas = UiAreas::default();
     let mut click_tracker = ClickTracker::default();
 
@@ -534,6 +536,8 @@ fn run_app(
                 &mut local_scroll,
                 &mut ui_areas,
                 &confirm_delete,
+                &local_filter,
+                local_filter_mode,
             )?;
             needs_render = false;
         }
@@ -556,11 +560,14 @@ fn run_app(
             let favorites_input_mode =
                 active_tab == NavTab::Favorites && favorites_page.input_mode();
             let text_input_active =
-                settings_input_mode || search_input_mode || favorites_input_mode;
+                settings_input_mode || search_input_mode || favorites_input_mode || local_filter_mode;
             let favorites_filter_key =
                 active_tab == NavTab::Favorites && matches!(key.code, KeyCode::Char('/'));
+            let local_filter_key =
+                active_tab == NavTab::LocalMusic && matches!(key.code, KeyCode::Char('/'));
             if !text_input_active
                 && !favorites_filter_key
+                && !local_filter_key
                 && let Some(tab) = pages::sidebar::handle_input(&key)
             {
                 active_tab = tab;
@@ -959,6 +966,26 @@ fn run_app(
                             }
                             _ => {}
                         }
+                    } else if local_filter_mode {
+                        match (key.modifiers, key.code) {
+                            (KeyModifiers::NONE, KeyCode::Esc) => {
+                                local_filter_mode = false;
+                                local_filter.clear();
+                                local_selected = 0;
+                                local_scroll = 0;
+                            }
+                            (KeyModifiers::NONE, KeyCode::Backspace) => {
+                                local_filter.pop();
+                                local_selected = 0;
+                                local_scroll = 0;
+                            }
+                            (KeyModifiers::NONE, KeyCode::Char(c)) => {
+                                local_filter.push(c);
+                                local_selected = 0;
+                                local_scroll = 0;
+                            }
+                            _ => {}
+                        }
                     } else {
                         match (key.modifiers, key.code) {
                             (KeyModifiers::NONE, KeyCode::Char('r')) => {
@@ -1067,6 +1094,12 @@ fn run_app(
                                             ));
                                     }
                                 }
+                            }
+                            (KeyModifiers::NONE, KeyCode::Char('/')) => {
+                                local_filter_mode = true;
+                                local_filter.clear();
+                                local_selected = 0;
+                                local_scroll = 0;
                             }
                             _ => {}
                         }
@@ -1192,6 +1225,8 @@ fn run_app(
                 &mut local_scroll,
                 &mut ui_areas,
                 &confirm_delete,
+                &local_filter,
+                local_filter_mode,
             )?;
             needs_render = false;
         }
@@ -1215,6 +1250,8 @@ fn draw_app(
     local_scroll: &mut usize,
     ui_areas: &mut UiAreas,
     confirm_delete: &Option<(String, std::path::PathBuf)>,
+    local_filter: &str,
+    local_filter_mode: bool,
 ) -> anyhow::Result<()> {
     // Kitty 图片是终端外部图层，必须在绘制非主页前清除，避免它短暂覆盖本地/历史页面。
     if active_tab != NavTab::Main {
@@ -1297,12 +1334,29 @@ fn draw_app(
 
                 let local_src = ctx.source_manager.local_source();
                 let paths = ctx.config.read().unwrap().local_music.paths.clone();
-                let songs = local_src.all_songs();
+                let all_songs = local_src.all_songs();
+                let songs: Vec<_> = if local_filter.is_empty() {
+                    all_songs
+                } else {
+                    let filter_lower = local_filter.to_lowercase();
+                    all_songs
+                        .into_iter()
+                        .filter(|s| {
+                            s.name.to_lowercase().contains(&filter_lower)
+                                || s.singer.to_lowercase().contains(&filter_lower)
+                        })
+                        .collect()
+                };
 
+                let title = if local_filter.is_empty() {
+                    format!("本地音乐 ({} 首)", songs.len())
+                } else {
+                    format!("本地音乐 — 过滤: {} ({} / {} 首)", local_filter, songs.len(), local_src.all_songs().len())
+                };
                 let block = Block::default()
                     .borders(Borders::ALL)
                     .border_style(Style::new().fg(crate::theme::muted(ctx)))
-                    .title(format!("本地音乐 ({} 首)", songs.len()));
+                    .title(title);
                 let inner = block.inner(content_area);
                 block.render(content_area, frame.buffer_mut());
 
@@ -1318,13 +1372,32 @@ fn draw_app(
                 }
 
                 if songs.is_empty() {
-                    Paragraph::new(Line::from(" 目录下未找到音频文件，按 r 重新扫描"))
+                    let msg = if local_filter.is_empty() {
+                        " 目录下未找到音频文件，按 r 重新扫描"
+                    } else {
+                        " 无匹配结果，按 Esc 清除过滤"
+                    };
+                    Paragraph::new(Line::from(msg))
                         .style(Style::new().fg(Color::DarkGray))
                         .render(inner, frame.buffer_mut());
                     return;
                 }
 
-                // 显示歌曲列表标题
+                let mut content_y = inner.y;
+                let mut content_height = inner.height;
+
+                if local_filter_mode {
+                    let input_area = Rect::new(inner.x, content_y, inner.width, 1);
+                    let input_text = format!(" 过滤: {}", local_filter);
+                    Paragraph::new(Line::from(Span::styled(
+                        input_text,
+                        Style::new().fg(crate::theme::accent(ctx)),
+                    )))
+                    .render(input_area, frame.buffer_mut());
+                    content_y += 1;
+                    content_height = content_height.saturating_sub(1);
+                }
+
                 let header = pages::components::song_table::header(inner.width);
                 Paragraph::new(Line::from(Span::styled(
                     header,
@@ -1333,16 +1406,17 @@ fn draw_app(
                         .add_modifier(ratatui::style::Modifier::BOLD),
                 )))
                 .render(
-                    Rect::new(inner.x, inner.y, inner.width, 1),
+                    Rect::new(inner.x, content_y, inner.width, 1),
                     frame.buffer_mut(),
                 );
+                content_y += 1;
+                content_height = content_height.saturating_sub(1);
 
-                if inner.height < 3 {
+                if content_height < 1 {
                     return;
                 }
 
-                // 显示歌曲列表
-                let visible_height = (inner.height.saturating_sub(2)) as usize;
+                let visible_height = content_height as usize;
                 let sel = *local_selected;
                 let mut sc = *local_scroll;
 
@@ -1359,7 +1433,7 @@ fn draw_app(
                     let row = i - sc;
                     let song = &songs[i];
                     let text = pages::components::song_table::row(song, i, inner.width);
-                    let line_area = Rect::new(inner.x, inner.y + 1 + row as u16, inner.width, 1);
+                    let line_area = Rect::new(inner.x, content_y + row as u16, inner.width, 1);
                     let style = if i == sel {
                         Style::new()
                             .bg(crate::theme::accent(ctx))
