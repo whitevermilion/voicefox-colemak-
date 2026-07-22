@@ -921,7 +921,19 @@ fn run_app(
                 }
                 NavTab::LocalMusic => {
                     let local_src = ctx.source_manager.local_source();
-                    let songs = local_src.all_songs();
+                    let all_songs = local_src.all_songs();
+                    let songs: Vec<_> = if local_filter.is_empty() {
+                        all_songs
+                    } else {
+                        let filter_lower = local_filter.to_lowercase();
+                        all_songs
+                            .into_iter()
+                            .filter(|s| {
+                                s.name.to_lowercase().contains(&filter_lower)
+                                    || s.singer.to_lowercase().contains(&filter_lower)
+                            })
+                            .collect()
+                    };
                     let paths = ctx.config.read().unwrap().local_music.paths.clone();
                     let max_depth = ctx.config.read().unwrap().local_music.max_depth;
 
@@ -968,9 +980,10 @@ fn run_app(
                         }
                     } else if local_filter_mode {
                         match (key.modifiers, key.code) {
-                            (KeyModifiers::NONE, KeyCode::Esc) => {
+                            (KeyModifiers::NONE, KeyCode::Esc)
+                            | (KeyModifiers::NONE, KeyCode::CapsLock)
+                            | (KeyModifiers::NONE, KeyCode::Enter) => {
                                 local_filter_mode = false;
-                                local_filter.clear();
                                 local_selected = 0;
                                 local_scroll = 0;
                             }
@@ -1004,13 +1017,21 @@ fn run_app(
                             (KeyModifiers::NONE, KeyCode::Up)
                             | (KeyModifiers::NONE, KeyCode::Char('e')) => {
                                 if !songs.is_empty() {
-                                    local_selected = local_selected.saturating_sub(1);
+                                    if local_selected > 0 {
+                                        local_selected -= 1;
+                                    } else if wrap_navigation {
+                                        local_selected = songs.len().saturating_sub(1);
+                                    }
                                 }
                             }
                             (KeyModifiers::NONE, KeyCode::Down)
                             | (KeyModifiers::NONE, KeyCode::Char('n')) => {
-                                if !songs.is_empty() && local_selected + 1 < songs.len() {
-                                    local_selected += 1;
+                                if !songs.is_empty() {
+                                    if local_selected + 1 < songs.len() {
+                                        local_selected += 1;
+                                    } else if wrap_navigation {
+                                        local_selected = 0;
+                                    }
                                 }
                             }
                             (KeyModifiers::NONE, KeyCode::Home)
@@ -1119,6 +1140,9 @@ fn run_app(
                     if tab == NavTab::Search {
                         search_page.lock().unwrap().input_mode = true;
                     }
+                    local_filter_mode = false;
+                    local_filter.clear();
+                    confirm_delete = None;
                 }
             } else if ui_areas.progress.contains(position)
                 && matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))

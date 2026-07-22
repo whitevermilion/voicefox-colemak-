@@ -86,6 +86,7 @@ impl SearchPage {
                 }
                 (KeyModifiers::NONE, KeyCode::Enter) => {
                     let keyword = self.input.trim().to_string();
+                    self.input_mode = false;
                     if !(keyword.is_empty()
                         || self.is_searching && self.last_searched_input == keyword)
                     {
