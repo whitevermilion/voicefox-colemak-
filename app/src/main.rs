@@ -393,6 +393,7 @@ fn run_app(
     let mut history_scroll: usize = 0;
     let mut local_selected: usize = 0;
     let mut local_scroll: usize = 0;
+    let mut local_filter = pages::components::list_filter::ListFilter::new();
     let mut confirm_delete: Option<LocalDeleteConfirmation> = None;
     let mut song_menu: Option<SongContextMenu> = None;
     let mut ui_areas = UiAreas::default();
@@ -903,6 +904,7 @@ fn run_app(
                 &mut history_scroll,
                 &mut local_selected,
                 &mut local_scroll,
+                &mut local_filter,
                 &mut ui_areas,
                 &confirm_delete,
                 &song_menu,
@@ -928,8 +930,10 @@ fn run_app(
                 active_tab == NavTab::Search && search_page.lock().unwrap().input_mode;
             let favorites_input_mode =
                 active_tab == NavTab::Favorites && favorites_page.input_mode();
+            let local_input_mode =
+                active_tab == NavTab::LocalMusic && local_filter.is_active();
             let text_input_active =
-                settings_input_mode || search_input_mode || favorites_input_mode;
+                settings_input_mode || search_input_mode || favorites_input_mode || local_input_mode;
 
             if let Some(ref page) = bili_login_page {
                 let action = page.lock().unwrap().handle_input(key, &kb_resolver);
@@ -1397,7 +1401,32 @@ fn run_app(
                 }
                 NavTab::LocalMusic => {
                     let local_src = ctx.source_manager.local_source();
-                    let songs = local_src.all_songs();
+                    let all_songs = local_src.all_songs();
+
+                    // 1. 过滤输入模式优先消耗按键
+                    if local_filter.handle_input(&key) {
+                        if !local_filter.is_active() {
+                            local_selected = 0;
+                            local_scroll = 0;
+                        }
+                        needs_render = true;
+                        continue;
+                    }
+
+                    // 2. 计算过滤后的歌曲列表
+                    let songs = if local_filter.query().is_empty() {
+                        all_songs
+                    } else {
+                        let query = local_filter.query().trim().to_lowercase();
+                        all_songs
+                            .into_iter()
+                            .filter(|s| {
+                                s.name.to_lowercase().contains(&query)
+                                    || s.singer.to_lowercase().contains(&query)
+                            })
+                            .collect()
+                    };
+
                     if let Some(action) = kb_resolver.resolve_page("local", &key) {
                         match action {
                             Action::LocalRescan => {
@@ -1414,6 +1443,10 @@ fn run_app(
                                 );
                                 local_selected = 0;
                                 local_scroll = 0;
+                                local_filter.reset();
+                            }
+                            Action::LocalFilter => {
+                                local_filter.activate();
                             }
                             Action::ListSelectUp => {
                                 local_selected = previous_list_index(
@@ -1522,6 +1555,7 @@ fn run_app(
                                 );
                                 local_selected = 0;
                                 local_scroll = 0;
+                                local_filter.reset();
                             }
                             (KeyModifiers::NONE, KeyCode::Up) => {
                                 local_selected = previous_list_index(
@@ -1831,6 +1865,7 @@ fn run_app(
                 &mut history_scroll,
                 &mut local_selected,
                 &mut local_scroll,
+                &mut local_filter,
                 &mut ui_areas,
                 &confirm_delete,
                 &song_menu,
@@ -1856,6 +1891,7 @@ fn draw_app(
     history_scroll: &mut usize,
     local_selected: &mut usize,
     local_scroll: &mut usize,
+    local_filter: &mut pages::components::list_filter::ListFilter,
     ui_areas: &mut UiAreas,
     confirm_delete: &Option<LocalDeleteConfirmation>,
     song_menu: &Option<SongContextMenu>,
@@ -1936,14 +1972,40 @@ fn draw_app(
                 'local_content: {
                     let local_src = ctx.source_manager.local_source();
                     let paths = ctx.config.read().unwrap().local_music.paths.clone();
-                    let songs = local_src.all_songs();
+                    let all_songs = local_src.all_songs();
                     let is_scanning = local_src.is_scanning();
+
+                    // 计算过滤后的歌曲列表
+                    let songs: Vec<_> = if local_filter.query().is_empty() {
+                        all_songs
+                    } else {
+                        let query = local_filter.query().trim().to_lowercase();
+                        all_songs
+                            .into_iter()
+                            .filter(|s| {
+                                s.name.to_lowercase().contains(&query)
+                                    || s.singer.to_lowercase().contains(&query)
+                            })
+                            .collect()
+                    };
+
+                    let show_filter = local_filter.is_active() || !local_filter.query().is_empty();
 
                     let block = Block::default()
                         .borders(Borders::ALL)
                         .border_style(Style::new().fg(crate::theme::muted(ctx)))
                         .title(if is_scanning {
-                            format!("本地音乐 ({} 首，扫描中)", songs.len())
+                            format!(
+                                "本地音乐 ({}/{} 首，扫描中) · / 筛选 ",
+                                songs.len(),
+                                local_src.all_songs().len()
+                            )
+                        } else if show_filter {
+                            format!(
+                                "本地音乐 ({}/{} 首) · / 筛选 ",
+                                songs.len(),
+                                local_src.all_songs().len()
+                            )
                         } else {
                             format!("本地音乐 ({} 首)", songs.len())
                         });
@@ -1961,7 +2023,7 @@ fn draw_app(
                         break 'local_content;
                     }
 
-                    if songs.is_empty() && is_scanning {
+                    if songs.is_empty() && is_scanning && local_filter.query().is_empty() {
                         Paragraph::new(Line::from(" 正在扫描本地音乐，请稍候..."))
                             .style(Style::new().fg(Color::DarkGray))
                             .render(inner, frame.buffer_mut());
@@ -1969,10 +2031,27 @@ fn draw_app(
                     }
 
                     if songs.is_empty() {
-                        Paragraph::new(Line::from(" 目录下未找到音频文件，按 r 重新扫描"))
+                        let msg = if local_filter.query().is_empty() {
+                            " 目录下未找到音频文件，按 r 重新扫描"
+                        } else {
+                            " 无匹配结果，按 Esc 清除过滤"
+                        };
+                        Paragraph::new(Line::from(msg))
                             .style(Style::new().fg(Color::DarkGray))
                             .render(inner, frame.buffer_mut());
                         break 'local_content;
+                    }
+
+                    let mut cursor_y = inner.y;
+
+                    // 渲染过滤栏
+                    if show_filter {
+                        local_filter.render(
+                            Rect::new(inner.x, cursor_y, inner.width, 1),
+                            frame.buffer_mut(),
+                            ctx,
+                        );
+                        cursor_y = cursor_y.saturating_add(1);
                     }
 
                     let header = pages::components::song_table::header(inner.width);
@@ -1983,15 +2062,18 @@ fn draw_app(
                             .add_modifier(ratatui::style::Modifier::BOLD),
                     )))
                     .render(
-                        Rect::new(inner.x, inner.y, inner.width, 1),
+                        Rect::new(inner.x, cursor_y, inner.width, 1),
                         frame.buffer_mut(),
                     );
+                    cursor_y = cursor_y.saturating_add(1);
 
-                    if inner.height < 3 {
-                        break 'local_content;
-                    }
-
-                    let visible_height = (inner.height.saturating_sub(2)) as usize;
+                    let list = Rect::new(
+                        inner.x,
+                        cursor_y,
+                        inner.width,
+                        inner.bottom().saturating_sub(cursor_y),
+                    );
+                    let visible_height = list.height.max(1) as usize;
                     let sel = *local_selected;
                     let mut sc = *local_scroll;
 
@@ -2008,7 +2090,7 @@ fn draw_app(
                         let row = i - sc;
                         let text = pages::components::song_table::row(song, i, inner.width);
                         let line_area =
-                            Rect::new(inner.x, inner.y + 1 + row as u16, inner.width, 1);
+                            Rect::new(inner.x, cursor_y + row as u16, inner.width, 1);
                         let style = if i == sel {
                             Style::new()
                                 .bg(crate::theme::accent(ctx))

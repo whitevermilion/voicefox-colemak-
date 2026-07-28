@@ -89,6 +89,8 @@ pub enum Action {
     LocalRescan,
     /// 删除选中的本地文件（弹出确认）
     LocalDelete,
+    /// 进入过滤模式
+    LocalFilter,
 
     // --- 收藏页面专用 ---
     /// 进入过滤模式
@@ -287,6 +289,7 @@ fn default_page_bindings() -> HashMap<String, HashMap<Action, String>> {
     local.insert(Action::ListAddToQueueNext, "A".to_string());
     local.insert(Action::LocalRescan, "r".to_string());
     local.insert(Action::LocalDelete, "d".to_string());
+    local.insert(Action::LocalFilter, "/".to_string());
     pages.insert("local".to_string(), local);
 
     // --- 设置 ---
