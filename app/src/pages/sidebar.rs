@@ -96,7 +96,6 @@ fn tab_chunks(area: Rect) -> std::rc::Rc<[Rect]> {
 /// 处理侧边栏全局快捷键，返回要切换到的标签页
 pub fn handle_input(key: &KeyEvent) -> Option<NavTab> {
     match (key.modifiers, key.code) {
-        (KeyModifiers::NONE, KeyCode::Char('/')) => Some(NavTab::Search),
         (KeyModifiers::NONE, KeyCode::Char('1')) => Some(NavTab::Main),
         (KeyModifiers::NONE, KeyCode::Char('2')) => Some(NavTab::Search),
         (KeyModifiers::NONE, KeyCode::Char('3')) => Some(NavTab::Leaderboard),

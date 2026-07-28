@@ -1026,10 +1026,7 @@ fn run_app(
                 continue;
             }
 
-            let favorites_filter_key =
-                active_tab == NavTab::Favorites && matches!(key.code, KeyCode::Char('/'));
             if !text_input_active
-                && !favorites_filter_key
                 && let Some(tab) = pages::sidebar::handle_input(&key)
             {
                 active_tab = tab;
