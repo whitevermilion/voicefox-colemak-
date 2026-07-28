@@ -15,8 +15,7 @@ use crate::context::AppContext;
 pub struct FavoritesPage {
     selected: usize,
     scroll: usize,
-    query: String,
-    search_mode: bool,
+    filter: super::components::list_filter::ListFilter,
     viewport_height: usize,
 }
 
@@ -25,14 +24,13 @@ impl FavoritesPage {
         Self {
             selected: 0,
             scroll: 0,
-            query: String::new(),
-            search_mode: false,
+            filter: super::components::list_filter::ListFilter::new(),
             viewport_height: 1,
         }
     }
 
     pub fn input_mode(&self) -> bool {
-        self.search_mode
+        self.filter.is_active()
     }
 
     pub fn handle_input(
@@ -41,49 +39,24 @@ impl FavoritesPage {
         ctx: &AppContext,
         resolver: &KeybindingResolver,
     ) -> AppAction {
-        if self.search_mode {
-            match (key.modifiers, key.code) {
-                (KeyModifiers::NONE, KeyCode::Esc) => {
-                    self.search_mode = false;
-                    self.query.clear();
-                    self.selected = 0;
-                    self.scroll = 0;
-                }
-                (KeyModifiers::NONE, KeyCode::Enter) => {
-                    self.search_mode = false;
-                }
-                (_, KeyCode::Backspace)
-                    if !key
-                        .modifiers
-                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-                {
-                    self.query.pop();
-                    self.selected = 0;
-                    self.scroll = 0;
-                }
-                (_, KeyCode::Char(character))
-                    if !key
-                        .modifiers
-                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-                {
-                    self.query.push(character);
-                    self.selected = 0;
-                    self.scroll = 0;
-                }
-                _ => {}
+        let query_before = self.filter.query().to_string();
+        if self.filter.handle_input(key) {
+            if self.filter.query() != query_before {
+                self.selected = 0;
+                self.scroll = 0;
             }
             return AppAction::None;
         }
 
         let favorites = ctx.storage.load_favorites();
-        let filtered = self.filtered_indices(&favorites);
+        let filtered = self.filtered_song_indices(&favorites);
         self.clamp_selection(filtered.len());
         let half_page = (self.viewport_height / 2).max(1);
 
         if let Some(action) = resolver.resolve_page("favorites", key) {
             match action {
                 Action::FavoritesFilter => {
-                    self.search_mode = true;
+                    self.filter.activate();
                     return AppAction::None;
                 }
                 Action::ListSelectUp => {
@@ -168,7 +141,7 @@ impl FavoritesPage {
                         && ctx.storage.remove_favorite(song)
                     {
                         let remaining = ctx.storage.load_favorites();
-                        let remaining_len = self.filtered_indices(&remaining).len();
+                        let remaining_len = self.filtered_song_indices(&remaining).len();
                         self.clamp_selection(remaining_len);
                         return AppAction::ShowNotification(lx_core::events::Notification::info(
                             "已取消收藏",
@@ -177,10 +150,10 @@ impl FavoritesPage {
                     return AppAction::None;
                 }
                 Action::ListGoBack => {
-                    if self.query.is_empty() {
+                    if self.filter.query().is_empty() {
                         return AppAction::GoBack;
                     }
-                    self.query.clear();
+                    self.filter.reset();
                     self.selected = 0;
                     self.scroll = 0;
                     return AppAction::None;
@@ -191,13 +164,13 @@ impl FavoritesPage {
 
         match (key.modifiers, key.code) {
             (KeyModifiers::NONE, KeyCode::Char('/')) => {
-                self.search_mode = true;
+                self.filter.activate();
             }
             (KeyModifiers::NONE, KeyCode::Esc) => {
-                if self.query.is_empty() {
+                if self.filter.query().is_empty() {
                     return AppAction::GoBack;
                 }
-                self.query.clear();
+                self.filter.reset();
                 self.selected = 0;
                 self.scroll = 0;
             }
@@ -279,7 +252,7 @@ impl FavoritesPage {
                     && ctx.storage.remove_favorite(song)
                 {
                     let remaining = ctx.storage.load_favorites();
-                    let remaining_len = self.filtered_indices(&remaining).len();
+                    let remaining_len = self.filtered_song_indices(&remaining).len();
                     self.clamp_selection(remaining_len);
                     return AppAction::ShowNotification(lx_core::events::Notification::info(
                         "已取消收藏",
@@ -293,7 +266,7 @@ impl FavoritesPage {
 
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, ctx: &AppContext) {
         let favorites = ctx.storage.load_favorites();
-        let filtered = self.filtered_indices(&favorites);
+        let filtered = self.filtered_song_indices(&favorites);
         self.clamp_selection(filtered.len());
 
         let block = Block::default()
@@ -310,27 +283,14 @@ impl FavoritesPage {
             return;
         }
 
-        let show_search = self.search_mode || !self.query.is_empty();
+        let show_search = self.filter.is_active() || !self.filter.query().is_empty();
         let mut cursor_y = inner.y;
         if show_search {
-            let mode = if self.search_mode { "INSERT" } else { "FILTER" };
-            Paragraph::new(Line::from(vec![
-                Span::styled(
-                    format!(" / {} ", mode),
-                    Style::new()
-                        .fg(crate::theme::selection_fg(ctx))
-                        .bg(crate::theme::mauve(ctx))
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    format!(" {} ", self.query),
-                    Style::new()
-                        .fg(crate::theme::text(ctx))
-                        .bg(crate::theme::surface0(ctx)),
-                ),
-            ]))
-            .style(Style::new().bg(crate::theme::surface0(ctx)))
-            .render(Rect::new(inner.x, cursor_y, inner.width, 1), buf);
+            self.filter.render(
+                Rect::new(inner.x, cursor_y, inner.width, 1),
+                buf,
+                ctx,
+            );
             cursor_y = cursor_y.saturating_add(1);
         }
 
@@ -361,7 +321,7 @@ impl FavoritesPage {
             return;
         }
         if filtered.is_empty() {
-            Paragraph::new(format!("没有匹配“{}”的歌曲", self.query))
+            Paragraph::new(format!("没有匹配“{}”的歌曲", self.filter.query()))
                 .style(Style::new().fg(crate::theme::overlay1(ctx)))
                 .render(list, buf);
             return;
@@ -409,7 +369,7 @@ impl FavoritesPage {
         activate: bool,
     ) -> AppAction {
         let favorites = ctx.storage.load_favorites();
-        let filtered = self.filtered_indices(&favorites);
+        let filtered = self.filtered_song_indices(&favorites);
         let scroll_amount = ctx.config.read().unwrap().ui.scroll_amount.max(1);
         match event.kind {
             MouseEventKind::ScrollUp => {
@@ -421,9 +381,10 @@ impl FavoritesPage {
             }
             MouseEventKind::Down(MouseButton::Left) => {
                 let inner = Block::default().borders(Borders::ALL).inner(area);
-                let search_height = u16::from(self.search_mode || !self.query.is_empty());
+                let search_height =
+                    u16::from(self.filter.is_active() || !self.filter.query().is_empty());
                 if search_height == 1 && event.row == inner.y {
-                    self.search_mode = true;
+                    self.filter.activate();
                     return AppAction::None;
                 }
                 let list_y = inner.y.saturating_add(search_height).saturating_add(1);
@@ -456,9 +417,10 @@ impl FavoritesPage {
         ctx: &AppContext,
     ) -> Option<(Vec<SongInfo>, usize)> {
         let favorites = ctx.storage.load_favorites();
-        let filtered = self.filtered_indices(&favorites);
+        let filtered = self.filtered_song_indices(&favorites);
         let inner = Block::default().borders(Borders::ALL).inner(area);
-        let search_height = u16::from(self.search_mode || !self.query.is_empty());
+        let search_height =
+            u16::from(self.filter.is_active() || !self.filter.query().is_empty());
         let list_y = inner.y.saturating_add(search_height).saturating_add(1);
         if event.row < list_y || event.row >= inner.bottom() {
             return None;
@@ -471,25 +433,18 @@ impl FavoritesPage {
             .iter()
             .filter_map(|original| favorites.get(*original).cloned())
             .collect::<Vec<_>>();
-        self.search_mode = false;
+        self.filter.deactivate();
         self.selected = index;
         Some((songs, index))
     }
 
-    fn filtered_indices(&self, favorites: &[SongInfo]) -> Vec<usize> {
-        let query = self.query.trim().to_lowercase();
-        favorites
-            .iter()
-            .enumerate()
-            .filter_map(|(index, song)| {
-                let matches = query.is_empty()
-                    || song.name.to_lowercase().contains(&query)
-                    || song.singer.to_lowercase().contains(&query)
-                    || song.album_name.to_lowercase().contains(&query)
-                    || song.source.as_str().contains(&query);
-                matches.then_some(index)
-            })
-            .collect()
+    fn filtered_song_indices(&self, favorites: &[SongInfo]) -> Vec<usize> {
+        self.filter.filter(favorites, |song, query| {
+            song.name.to_lowercase().contains(query)
+                || song.singer.to_lowercase().contains(query)
+                || song.album_name.to_lowercase().contains(query)
+                || song.source.as_str().contains(query)
+        })
     }
 
     fn clamp_selection(&mut self, len: usize) {
@@ -517,8 +472,8 @@ mod tests {
         let songs = vec![song];
 
         for query in ["晴天", "周杰伦", "叶惠美", "kw"] {
-            page.query = query.into();
-            assert_eq!(page.filtered_indices(&songs), vec![0]);
+            page.filter.set_query(query);
+            assert_eq!(page.filtered_song_indices(&songs), vec![0]);
         }
     }
 }

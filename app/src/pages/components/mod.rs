@@ -7,6 +7,7 @@
 
 pub mod context_menu;
 pub mod header;
+pub mod list_filter;
 pub mod lyric;
 pub mod notification;
 pub mod progress_bar;
